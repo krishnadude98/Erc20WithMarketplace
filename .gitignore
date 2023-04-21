@@ -4,3 +4,6 @@ cache
 .env
 yarn.lock
 deployments
+coverage.json
+gas-report.txt
+.prettierrc
