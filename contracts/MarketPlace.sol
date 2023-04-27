@@ -3,9 +3,9 @@ pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./costomIercInterface.sol";
 
-error BuyToken__InSuffientFundSent();
+error BuyToken__InSuffientFundSentSendMultiplesOfPrice();
 error ClaimToken__UserNotBuyedToken();
 error ClaimToken__ClaimNotMatured();
 error ClaimToken__TransactionError();
@@ -18,7 +18,7 @@ contract MarketPlace is ReentrancyGuard, Ownable {
         uint payedAmt;
         uint amount;
     }
-    mapping(address => WaitList) public waitinglist;
+    mapping(address => WaitList[]) public waitinglist;
 
     //state variables
     IERC20 public immutable Htoken;
@@ -33,30 +33,49 @@ contract MarketPlace is ReentrancyGuard, Ownable {
     event TokenClaimed(address indexed buyer, uint amount);
     event RevenueCollected(address owner, uint amount);
 
-    // functions
-    function buyToken(uint _amt) public payable {
-        if (msg.value < price * _amt) revert BuyToken__InSuffientFundSent();
-        waitinglist[msg.sender] = WaitList(block.timestamp, msg.value, _amt);
-        emit TokenBuyed(msg.sender, _amt, msg.value);
+    //helper function
+    function removeElement(uint _index) private {
+        uint lastIndex = waitinglist[msg.sender].length - 1;
+        if (lastIndex != _index) {
+            waitinglist[msg.sender][_index] = waitinglist[msg.sender][lastIndex];
+        }
+        waitinglist[msg.sender].pop();
     }
 
-    function claimToken() public {
-        if (waitinglist[msg.sender].timeBuyed == 0) revert ClaimToken__UserNotBuyedToken();
-        if (waitinglist[msg.sender].timeBuyed + 365 days > block.timestamp)
+    // functions
+    function buyToken() public payable returns (uint256 index) {
+        if (msg.value % price != 0) revert BuyToken__InSuffientFundSentSendMultiplesOfPrice();
+        uint256 amount = (msg.value) / price;
+        waitinglist[msg.sender].push(WaitList(block.timestamp, msg.value, amount));
+        emit TokenBuyed(msg.sender, amount, msg.value);
+        return waitinglist[msg.sender].length - 1;
+    }
+
+    function claimToken(uint _index) public nonReentrant {
+        if (waitinglist[msg.sender][_index].timeBuyed == 0) revert ClaimToken__UserNotBuyedToken();
+        if (block.timestamp - waitinglist[msg.sender][_index].timeBuyed < 365 days)
             revert ClaimToken__ClaimNotMatured();
-        bool sucess = Htoken.transfer(msg.sender, waitinglist[msg.sender].amount);
+        uint amount = waitinglist[msg.sender][_index].amount;
+        bool sucess = Htoken.mint(msg.sender, amount);
         if (sucess) {
-            delete waitinglist[msg.sender];
+            emit TokenClaimed(msg.sender, waitinglist[msg.sender][_index].amount);
+            removeElement(_index);
         } else {
             revert ClaimToken__TransactionError();
         }
-        emit TokenClaimed(msg.sender, waitinglist[msg.sender].amount);
     }
 
     function withdrawRevenue() public onlyOwner {
         uint bal = address(this).balance;
-        (bool success, ) = payable(msg.sender).call{value: bal}("");
-        if (!success) revert WithdrawRevenue__RevenueNotSent();
+        payable(msg.sender).transfer(bal);
         emit RevenueCollected(msg.sender, bal);
+    }
+
+    receive() external payable {
+        buyToken();
+    }
+
+    fallback() external payable {
+        buyToken();
     }
 }

@@ -23,6 +23,9 @@ This contract is used to create a marketplace and sell the erc20 token.
 -   Deploy contract
     `yarn hardhat deploy --network sepolia`
 
+-   Test Contract
+    `yarn test`
+
 ## Features
 
 -   ERC20 token with total supply of 21 million tokens

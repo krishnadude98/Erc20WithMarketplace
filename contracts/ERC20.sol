@@ -7,7 +7,6 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 
 contract MyToken is ERC20, AccessControl {
     uint private immutable MAX_SUPPLY = 2100000 * (10 ** 18);
-    uint private CURRENT_SUPPLY = 0;
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
@@ -20,10 +19,10 @@ contract MyToken is ERC20, AccessControl {
         grantRole(MINTER_ROLE, account);
     }
 
-    function mint(address to, uint256 amount) public {
+    function mint(address to, uint256 amount) external returns (bool) {
         require(hasRole(MINTER_ROLE, msg.sender), "UNAUTHORIZED SENDER");
-        require(CURRENT_SUPPLY + amount < MAX_SUPPLY, "TOKEN_AMOUNT_GREATER_THAN_MAX_SUPPLY");
-        CURRENT_SUPPLY += amount;
+        require(totalSupply() + amount < MAX_SUPPLY, "TOKEN_AMOUNT_GREATER_THAN_MAX_SUPPLY");
         _mint(to, amount);
+        return true;
     }
 }
